@@ -43,7 +43,6 @@ func InitEngine(RouteCreator func() func(engine *gin.Engine)) *gin.Engine {
 		engine.Use(gin.Recovery())
 	}
 
-	AutoMigrate()
 	InitRoute(engine, RouteCreator())
 	return engine
 }
@@ -52,10 +51,16 @@ func InitRoute(engine *gin.Engine, routeCreator func(*gin.Engine)) {
 	routeCreator(engine)
 }
 
-func AutoMigrate() {
+func AutoMigrate(schemas []struct{}) {
 	db := InitDatabaseWithoutEngine()
 	if os.Getenv("ALLOW_AUTO_MIGRATE") == "true" {
 		//model.Migrate(db)
+		for _, schema := range schemas {
+			err := db.AutoMigrate(&schema)
+			if err != nil {
+				ErrorHandle(err)
+			}
+		}
 	}
 	CloseDatabase(db)
 }
