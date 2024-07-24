@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	//model "users/Models"
 )
 
 func InitEngine(RouteCreator func() func(engine *gin.Engine)) *gin.Engine {
