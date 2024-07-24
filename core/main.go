@@ -51,7 +51,7 @@ func InitRoute(engine *gin.Engine, routeCreator func(*gin.Engine)) {
 	routeCreator(engine)
 }
 
-func AutoMigrate(schemas []struct{ any }) {
+func AutoMigrate(schemas []interface{}) {
 	db := InitDatabaseWithoutEngine()
 	if os.Getenv("ALLOW_AUTO_MIGRATE") == "true" {
 		//model.Migrate(db)
