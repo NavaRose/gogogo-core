@@ -1,17 +1,22 @@
 package core
 
 import (
-	"fmt"
+	"github.com/NavaRose/gogogo-core/constants"
+	"github.com/NavaRose/gogogo-core/database"
+	"github.com/NavaRose/gogogo-core/exception"
+	"github.com/NavaRose/gogogo-core/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
-func InitEngine(RouteCreator func() func(engine *gin.Engine)) *gin.Engine {
+type Interface interface{}
+
+func InitEngine(RouteCreator func(engine *gin.Engine)) *gin.Engine {
 	// Load environment variables
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -28,11 +33,17 @@ func InitEngine(RouteCreator func() func(engine *gin.Engine)) *gin.Engine {
 	// Init engine
 	engine := gin.New()
 
+	// Setup middleware
+	engine.Use(middleware.HandleCORS())
+	engine.Use(middleware.ErrorHandler())
+
 	// Set trusted proxies
 	trustedProxies := []string{"127.0.0.1"}
 	if os.Getenv("TRUSTED_PROXIES") != "" {
 		trustedProxies = strings.Split(os.Getenv("TRUSTED_PROXIES"), ",")
 	}
+
+	//
 	err = engine.SetTrustedProxies(trustedProxies)
 	if err != nil {
 		log.Fatal("Error setting trusted proxies")
@@ -43,16 +54,13 @@ func InitEngine(RouteCreator func() func(engine *gin.Engine)) *gin.Engine {
 		engine.Use(gin.Recovery())
 	}
 
-	InitRoute(engine, RouteCreator())
+	RouteCreator(engine)
+	// Set middlewares
 	return engine
 }
 
-func InitRoute(engine *gin.Engine, routeCreator func(*gin.Engine)) {
-	routeCreator(engine)
-}
-
-func AutoMigrate(schemas []interface{}) {
-	db := InitDatabaseWithoutEngine()
+func AutoMigrate(schemas []Interface) {
+	db := database.InitDatabaseWithoutEngine()
 	if os.Getenv("ALLOW_AUTO_MIGRATE") == "true" {
 		//model.Migrate(db)
 		for _, schema := range schemas {
@@ -62,32 +70,41 @@ func AutoMigrate(schemas []interface{}) {
 			}
 		}
 	}
-	CloseDatabase(db)
+	database.CloseDatabase(db)
 }
 
-func InitDatabaseWithoutEngine() *gorm.DB {
-	dsn := fmt.Sprintf(
-		"host=%s user=%s dbname=%s sslmode=disable password=%s TimeZone=%s",
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_NAME"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("TIME_ZONE"),
-	)
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+func ErrorChecking(err error) bool {
 	if err != nil {
-		log.Fatal("Error opening database connection")
+		ErrorHandle(err)
+		return true
 	}
-
-	return db
+	return false
 }
 
-func CloseDatabase(db *gorm.DB) {
-	defer func() {
-		sqlDB, _ := db.DB()
-		if err := sqlDB.Close(); err != nil {
-			log.Fatal("Failed to close database connection: ", err)
+func CreateError(statusCode int, message string, metadata string) exception.Http {
+	return exception.NewHttpError(message, metadata, statusCode)
+}
+
+func Auth() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		token, exist := ctx.Get(constants.TokenKey)
+		if exist == false || token == nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "Invalid token",
+				"data":    nil,
+			})
+			ctx.Abort()
+			return
 		}
-	}()
+	}
+}
+
+func SetTokenCookie(accessToken string, ctx *gin.Context) {
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetCookie(constants.TokenKey, accessToken, int(time.Now().Add(time.Hour*24).Unix()), "", "", false, false)
+}
+
+func DestroyTokenCookie(ctx *gin.Context) {
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetCookie(constants.TokenKey, "", -1, "", "", false, false)
 }
