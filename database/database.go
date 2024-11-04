@@ -10,7 +10,7 @@ import (
 
 func InitDatabaseWithoutEngine() *gorm.DB {
 	dsn := fmt.Sprintf(
-		"host=%s user=%s dbname=%s sslmode=disable password=%s TimeZone=%s",
+		"host=%s user=%s dbname=%s sslmode=enable password=%s TimeZone=%s",
 		os.Getenv("DB_HOST"),
 		os.Getenv("DB_USER"),
 		os.Getenv("DB_NAME"),
